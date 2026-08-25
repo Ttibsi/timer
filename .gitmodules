@@ -1,0 +1,3 @@
+[submodule "rawterm"]
+	path = Sources/CRawterm/rawterm
+	url = https://github.com/ttibsi/rawterm

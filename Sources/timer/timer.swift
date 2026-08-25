@@ -15,7 +15,7 @@ import CRawterm;
 struct timer {
     static func main() {
         let dims = rawterm.get_term_size();
-        print("Hello, world!")
         print("dims = \(dims)")
+        print(ONE)
     }
 }

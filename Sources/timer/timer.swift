@@ -14,8 +14,51 @@ import CRawtermBridge;
 6 - Pause when `SPC` is pressed
 */
 
+enum Action {
+    case startstop 
+    case reset
+    case quit 
+    case none
+}
+
+nonisolated(unsafe) var setAction = Action.none
+
+// https://alexdremov.me/using-threads-in-swift/
+class Input: Thread {
+    let waiter = DispatchGroup()
+
+    override func start() {
+        waiter.enter()
+        super.start()
+    }
+
+    override func main() {
+        var key = rawterm.wait_for_input();
+        switch (key.code) {
+            case CChar("r"):
+                setAction = Action.reset
+            case CChar(" "):
+                if key.getMod() == rawterm.Mod.Space {
+                    setAction = Action.startstop
+                }
+            case CChar("q"):
+                setAction = Action.quit
+            default:
+                return
+        }
+        waiter.leave()
+    }
+
+    func join() {
+        waiter.wait()
+    }
+}
+
 @main
 struct timer {
+   nonisolated(unsafe) static let timerSource = DispatchSource.makeTimerSource(queue: .main)
+   nonisolated(unsafe) static var suspended = false
+
     static func main() {
         var dims = rawterm.get_term_size();
         if dims.horizontal < 35 || dims.vertical < 11 {
@@ -47,20 +90,37 @@ struct timer {
             rawterm.Pos(dims.horizontal / 2 + 8, topLine)
         ]
 
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now(), repeating: .seconds(1))
-        let start = Date()
+        let inputThread = Input()
+        inputThread.start()
 
-        timer.setEventHandler {
-            let elapsedSeconds = Date().timeIntervalSince(start)
-            drawDigits(cur: &cur, time: elapsedSeconds, numCells: numCells);
-            print("tick: \(Date())")
-        }
+        timerSource.schedule(deadline: .now(), repeating: .seconds(1))
 
-        timer.resume()
+        startTimer(cur: &cur, numCells: numCells)
         dispatchMain()
 
         rawterm.Cursor.cursor_show();
+    }
+
+    static func startTimer(cur: inout rawterm.Cursor, numCells: Array<rawterm.Pos>) {
+        let start = Date()
+        timerSource.setEventHandler {
+            let elapsedSeconds = Date().timeIntervalSince(start)
+            drawDigits(cur: &cur, time: elapsedSeconds, numCells: numCells);
+
+            switch setAction {
+                case Action.startstop:
+                    (suspended ? timerSource.resume() : timerSource.suspend())
+                case Action.reset:
+                    timerSource.invalidate()
+                    startTimer(cur: cur, numCells: numCells)
+                case Action.quit:
+                    timerSource.invalidate()
+            }
+
+            print("tick: \(Date())")
+        }
+
+        timerSource.resume()
     }
 
     static func drawDigits(cur: inout rawterm.Cursor, time: Double, numCells: Array<rawterm.Pos>) {

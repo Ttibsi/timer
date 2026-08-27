@@ -1,4 +1,5 @@
 import CRawterm;
+import CRawtermBridge;
 
 /*
 1 - Get the terminal dimensions
@@ -14,8 +15,37 @@ import CRawterm;
 @main
 struct timer {
     static func main() {
-        let dims = rawterm.get_term_size();
-        print("dims = \(dims)")
-        print(ONE)
+        var dims = rawterm.get_term_size();
+        if dims.horizontal < 35 || dims.vertical < 11 {
+            print("ERROR: Terminal dimensions too small")
+            return;
+        }
+
+        dims.vertical -= 1;
+
+        rawterm.enable_raw_mode()
+        rawterm.enter_alt_screen();
+
+        rawterm.Cursor.cursor_hide();
+        var cur = rawterm.Cursor();
+        cur.reset();
+
+        // Draw border once
+        let region = rawterm.Region(rawterm.Pos(1, 1), dims);
+        var border = rawterm.Border(region);
+        let inside_border = Int(dims.vertical);
+        let contents = Array(repeating: std.string(""), count: inside_border);
+        rawterm_bridge.drawBorder(&border, &cur, contents, inside_border);
+
+        sleep(5);
+
+        // var time = [ZERO, ZERO, ZERO, ZERO]
+        //
+        // while true {
+        //     let display = draw_time(digits: time)
+        //     print_display(display: display, cursor: cur)
+        // }
+
+        rawterm.Cursor.cursor_show();
     }
 }

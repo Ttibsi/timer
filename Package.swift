@@ -6,19 +6,29 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "timer",
-            dependencies: ["CRawterm"],
+            dependencies: ["CRawterm", "CRawtermBridge"],
             swiftSettings: [.interoperabilityMode(.Cxx)],
         ),
         .testTarget(
             name: "timerTests",
             dependencies: ["timer"]
         ),
+        
+        .target(
+            name: "CRawtermBridge",
+            dependencies: ["CRawterm"],
+            publicHeadersPath: ".",
+            cxxSettings: [
+                .headerSearchPath("../CRawterm/rawterm"),
+            ],
+        ),
+
         .target(
             name: "CRawterm",
             dependencies: [],
+            path: "Sources/CRawterm",
             exclude: [
                 "./rawterm/examples",
-                "./rawterm/rawterm/extras",
                 "./rawterm/tests",
             ],
             sources: [

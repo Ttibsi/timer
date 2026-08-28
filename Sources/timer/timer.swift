@@ -23,34 +23,39 @@ enum Action {
 
 nonisolated(unsafe) var setAction = Action.none
 
-// https://alexdremov.me/using-threads-in-swift/
 class Input: Thread {
-    let waiter = DispatchGroup()
+    let onAction: @Sendable (Action) -> Void
 
-    override func start() {
-        waiter.enter()
-        super.start()
+    init(onAction: @escaping @Sendable (Action) -> Void) {
+        self.onAction = onAction
+        super.init()
     }
 
     override func main() {
-        var key = rawterm.wait_for_input();
-        switch (key.code) {
+        let onAction = self.onAction
+        while true {
+            var key = rawterm.wait_for_input();
+            let action: Action
+
+            switch (key.code) {
             case CChar("r"):
-                setAction = Action.reset
+                action = .reset
             case CChar(" "):
                 if key.getMod() == rawterm.Mod.Space {
-                    setAction = Action.startstop
+                    action = .startstop
+                } else {
+                    continue
                 }
             case CChar("q"):
-                setAction = Action.quit
+                action = .quit
             default:
-                return
-        }
-        waiter.leave()
-    }
+                continue
+            }
 
-    func join() {
-        waiter.wait()
+            DispatchQueue.main.async {
+                onAction(action)
+            }
+        }
     }
 }
 
@@ -76,32 +81,35 @@ struct timer {
         cur.reset();
 
         // Draw border once
-        // let region = rawterm.Region(rawterm.Pos(1, 1), dims);
-        // var border = rawterm.Border(region);
-        // let inside_border = Int(dims.vertical);
-        // let contents = Array(repeating: std.string(""), count: inside_border);
-        // rawterm_bridge.drawBorder(&border, &cur, contents, inside_border);
+        let region = rawterm.Region(rawterm.Pos(1, 1), dims);
+        var border = rawterm.Border(region);
+        let inside_border = Int(dims.vertical);
+        let contents = Array(repeating: std.string(""), count: inside_border);
+        rawterm_bridge.drawBorder(&border, &cur, contents, inside_border);
 
         let topLine: Int32 = 4;
         let numCells = [
-            rawterm.Pos(dims.horizontal / 2 - 12, topLine),
-            rawterm.Pos(dims.horizontal / 2 - 6, topLine),
-            rawterm.Pos(dims.horizontal / 2 + 2, topLine),
-            rawterm.Pos(dims.horizontal / 2 + 8, topLine)
+            rawterm.Pos(topLine, dims.horizontal / 2 - 12),
+            rawterm.Pos(topLine, dims.horizontal / 2 - 6),
+            rawterm.Pos(topLine, dims.horizontal / 2 + 2),
+            rawterm.Pos(topLine, dims.horizontal / 2 + 8)
         ]
 
-        let inputThread = Input()
+        let inputThread = Input { action in
+            setAction = action
+        }
         inputThread.start()
 
         timerSource.schedule(deadline: .now(), repeating: .seconds(1))
 
-        startTimer(cur: &cur, numCells: numCells)
+        startTimer(cur: cur, numCells: numCells)
         dispatchMain()
 
         rawterm.Cursor.cursor_show();
     }
 
-    static func startTimer(cur: inout rawterm.Cursor, numCells: Array<rawterm.Pos>) {
+    static func startTimer(cur: rawterm.Cursor, numCells: Array<rawterm.Pos>) {
+        var cur = cur
         let start = Date()
         timerSource.setEventHandler {
             let elapsedSeconds = Date().timeIntervalSince(start)
@@ -111,13 +119,15 @@ struct timer {
                 case Action.startstop:
                     (suspended ? timerSource.resume() : timerSource.suspend())
                 case Action.reset:
-                    timerSource.invalidate()
+                    timerSource.cancel()
                     startTimer(cur: cur, numCells: numCells)
                 case Action.quit:
-                    timerSource.invalidate()
+                    timerSource.cancel()
+                case Action.none:
+                    break
             }
 
-            print("tick: \(Date())")
+            setAction = .none
         }
 
         timerSource.resume()
@@ -135,9 +145,11 @@ struct timer {
             secs % 10
         ]
 
+        let backFiveDownOne = "\u{1B}[6D\u{1B}[B"
         for (cell, display) in zip(numCells, displayNums) {
             cur.move(cell)
-            print(digits[display])
+            print(digits[display].replacing("\n", with: backFiveDownOne))
         }
     }
 }
+

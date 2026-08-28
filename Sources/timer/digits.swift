@@ -51,7 +51,7 @@ let SEVEN = """
     # 
    #  
   #   
- #
+ #    
 """
 
 let EIGHT = """

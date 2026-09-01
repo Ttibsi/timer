@@ -62,10 +62,6 @@ struct timer {
 
         startTimer(numCells: numCells)
         dispatchMain()
-
-        rawterm.Cursor.cursor_show()
-        rawterm.exit_alt_screen()
-        rawterm.disable_raw_mode()
     }
 
     static func startTimer(numCells: Array<rawterm.Pos>) {
@@ -96,6 +92,10 @@ struct timer {
             case Character("q").asciiValue!:
                 timerSource.cancel()
                 inputSource.cancel()
+
+                rawterm.Cursor.cursor_show()
+                rawterm.exit_alt_screen()
+                rawterm.disable_raw_mode()
                 exit(0)
 
             case Character(" ").asciiValue!:

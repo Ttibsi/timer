@@ -86,51 +86,51 @@ struct timer {
 
     static func startTimer(cur: rawterm.Cursor, numCells: Array<rawterm.Pos>) {
         let inputQueue = DispatchQueue(label: "userInput", qos: .userInitiated)
-        nonisolated var suspended = false
-            var cur = cur
-            let start = Date()
-            timerSource.setEventHandler {
-                let elapsedSeconds = Date().timeIntervalSince(start)
-                    drawDigits(cur: &cur, time: elapsedSeconds, numCells: numCells);
+        nonisolated(unsafe) var suspended = false
+        var cur = cur
+        let start = Date()
+        timerSource.setEventHandler {
+            let elapsedSeconds = Date().timeIntervalSince(start)
+                drawDigits(cur: &cur, time: elapsedSeconds, numCells: numCells);
 
-                inputQueue.async {
-                    let result = wait_for_input()
-                        DispatchQueue.main.async {
-                            switch result {
-                                case Command.toggle:
-                                    (suspended ? timerSource.resume() : timerSource.suspend())
-                                        suspended = !suspended
-                                case Command.reset:
+            inputQueue.async {
+                let result = wait_for_input()
+                    DispatchQueue.main.async {
+                        switch result {
+                            case Command.toggle:
+                                (suspended ? timerSource.resume() : timerSource.suspend())
+                                    suspended = !suspended
+                            case Command.reset:
+                                    timerSource.cancel()
+                                        startTimer(cur: cur, numCells: numCells)
+                            case Command.quit:
                                         timerSource.cancel()
-                                            startTimer(cur: cur, numCells: numCells)
-                                case Command.quit:
-                                            timerSource.cancel()
-                            }
                         }
-                }
-
-                timerSource.resume()
+                    }
             }
+
+            timerSource.resume()
+        }
     }
 
 
     static func drawDigits(cur: inout rawterm.Cursor, time: Double, numCells: Array<rawterm.Pos>) {
         let mins = Int(time / 60)
-            let secs = Int(time.truncatingRemainder(dividingBy: 60))
-            assert(mins < 60) // TODO: handle hours as well
+        let secs = Int(time.truncatingRemainder(dividingBy: 60))
+        assert(mins < 60) // TODO: handle hours as well
 
-            let displayNums = [
-            (mins < 10 ? 0 : Int(mins/10)),
-            mins % 10,
-            (secs < 10 ? 0 : Int(secs/10)),
-            secs % 10
-            ]
+        let displayNums = [
+        (mins < 10 ? 0 : Int(mins/10)),
+        mins % 10,
+        (secs < 10 ? 0 : Int(secs/10)),
+        secs % 10
+        ]
 
-            let backFiveDownOne = "\u{1B}[6D\u{1B}[B"
-            for (cell, display) in zip(numCells, displayNums) {
-                cur.move(cell)
-                    print(digits[display].replacing("\n", with: backFiveDownOne))
-            }
+        let backFiveDownOne = "\u{1B}[6D\u{1B}[B"
+        for (cell, display) in zip(numCells, displayNums) {
+            cur.move(cell)
+                print(digits[display].replacing("\n", with: backFiveDownOne))
+        }
     }
 }
 

@@ -1,5 +1,4 @@
 import Foundation;
-import CoreFoundation;
 import CRawterm;
 import CRawtermBridge;
 
@@ -14,16 +13,14 @@ import CRawtermBridge;
    6 - Pause when `SPC` is pressed
  */
 
-enum Command {
-    case toggle 
-    case reset
-    case quit 
-}
-
 @MainActor
 @main
 struct timer {
+    static var cur = rawterm.Cursor()
     static let timerSource = DispatchSource.makeTimerSource(queue: .main)
+    static let inputSource = DispatchSource.makeTimerSource(queue: .main)
+    static var timerStarted = false
+    static var suspended = false
 
     static func main() {
         var dims = rawterm.get_term_size();
@@ -32,21 +29,20 @@ struct timer {
             return;
         }
 
-        dims.vertical -= 1;
+        dims.vertical -= 1
 
         rawterm.enable_raw_mode()
-        rawterm.enter_alt_screen();
+        rawterm.enter_alt_screen()
 
-        rawterm.Cursor.cursor_hide();
-        var cur = rawterm.Cursor();
-        cur.reset();
+        rawterm.Cursor.cursor_hide()
+        cur.reset()
 
         // Draw border once
-        let region = rawterm.Region(rawterm.Pos(1, 1), dims);
-        var border = rawterm.Border(region);
-        let inside_border = Int(dims.vertical);
-        let contents = Array(repeating: std.string(""), count: inside_border);
-        rawterm_bridge.drawBorder(&border, &cur, contents, inside_border);
+        let region = rawterm.Region(rawterm.Pos(1, 1), dims)
+        var border = rawterm.Border(region)
+        let inside_border = Int(dims.vertical)
+        let contents = Array(repeating: std.string(""), count: inside_border)
+        rawterm_bridge.drawBorder(&border, &cur, contents, inside_border)
 
         let topLine: Int32 = 4;
         let numCells = [
@@ -57,62 +53,59 @@ struct timer {
         ]
 
         timerSource.schedule(deadline: .now(), repeating: .seconds(1))
+        inputSource.schedule(deadline: .now(), repeating: .milliseconds(20))
+        inputSource.setEventHandler {
+            dispatchPrecondition(condition: .onQueue(.main))
+            pollInput(numCells: numCells)
+        }
+        inputSource.resume()
 
-        startTimer(cur: cur, numCells: numCells)
+        startTimer(numCells: numCells)
         dispatchMain()
 
-        rawterm.Cursor.cursor_show();
+        rawterm.Cursor.cursor_show()
+        rawterm.exit_alt_screen()
+        rawterm.disable_raw_mode()
     }
 
-    nonisolated static func wait_for_input() -> Command {
-        while (true) {
-            var k: rawterm.Key? = Optional(fromCxx: rawterm.process_keypress())
-            if k != nil {
-                switch k!.code {
-                    case CChar("r"):
-                        return Command.reset
-                    case CChar("q"):
-                            return Command.quit
-                    case CChar(" "):
-                        if (k!.getMod() == rawterm.Mod.Space) {
-                            return Command.toggle
-                        }
-                    default:
-                        continue
-                }
-            }
-        }
-    }
-
-    static func startTimer(cur: rawterm.Cursor, numCells: Array<rawterm.Pos>) {
-        let inputQueue = DispatchQueue(label: "userInput", qos: .userInitiated)
-        nonisolated(unsafe) var suspended = false
-        var cur = cur
+    static func startTimer(numCells: Array<rawterm.Pos>) {
         let start = Date()
         timerSource.setEventHandler {
+            dispatchPrecondition(condition: .onQueue(.main))
             let elapsedSeconds = Date().timeIntervalSince(start)
-                drawDigits(cur: &cur, time: elapsedSeconds, numCells: numCells);
+            drawDigits(cur: &cur, time: elapsedSeconds, numCells: numCells);
+        }
 
-            inputQueue.async {
-                let result = wait_for_input()
-                    DispatchQueue.main.async {
-                        switch result {
-                            case Command.toggle:
-                                (suspended ? timerSource.resume() : timerSource.suspend())
-                                    suspended = !suspended
-                            case Command.reset:
-                                    timerSource.cancel()
-                                        startTimer(cur: cur, numCells: numCells)
-                            case Command.quit:
-                                        timerSource.cancel()
-                        }
-                    }
-            }
-
+        if !timerStarted {
             timerSource.resume()
+            timerStarted = true
         }
     }
 
+    static func pollInput(numCells: Array<rawterm.Pos>) {
+        guard var k: rawterm.Key = Optional(fromCxx: rawterm.process_keypress()) else { return }
+        let keyCode = UInt8(bitPattern: k.code)
+        switch keyCode {
+            case Character("r").asciiValue!:
+                if suspended {
+                    timerSource.resume()
+                    suspended = false
+                }
+                startTimer(numCells: numCells)
+
+            case Character("q").asciiValue!:
+                timerSource.cancel()
+                inputSource.cancel()
+                exit(0)
+
+            case Character(" ").asciiValue!:
+                if k.getMod() == rawterm.Mod.Space {
+                    (suspended ? timerSource.resume() : timerSource.suspend())
+                    suspended = !suspended
+                }
+            default: break
+        }
+    }
 
     static func drawDigits(cur: inout rawterm.Cursor, time: Double, numCells: Array<rawterm.Pos>) {
         let mins = Int(time / 60)
@@ -120,17 +113,16 @@ struct timer {
         assert(mins < 60) // TODO: handle hours as well
 
         let displayNums = [
-        (mins < 10 ? 0 : Int(mins/10)),
-        mins % 10,
-        (secs < 10 ? 0 : Int(secs/10)),
-        secs % 10
+            (mins < 10 ? 0 : Int(mins/10)),
+            mins % 10,
+            (secs < 10 ? 0 : Int(secs/10)),
+            secs % 10
         ]
 
         let backFiveDownOne = "\u{1B}[6D\u{1B}[B"
         for (cell, display) in zip(numCells, displayNums) {
             cur.move(cell)
-                print(digits[display].replacing("\n", with: backFiveDownOne))
+            print(digits[display].replacing("\n", with: backFiveDownOne))
         }
     }
 }
-

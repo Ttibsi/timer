@@ -21,6 +21,7 @@ struct timer {
     static let inputSource = DispatchSource.makeTimerSource(queue: .main)
     static var timerStarted = false
     static var suspended = false
+    static var caption = ""
 
     static func main() {
         var dims = rawterm.get_term_size();
@@ -46,30 +47,31 @@ struct timer {
 
         let topLine: Int32 = 4;
         let numCells = [
-            rawterm.Pos(topLine, dims.horizontal / 2 - 12),
-            rawterm.Pos(topLine, dims.horizontal / 2 - 6),
-            rawterm.Pos(topLine, dims.horizontal / 2 + 2),
-            rawterm.Pos(topLine, dims.horizontal / 2 + 8)
+            rawterm.Pos(topLine, dims.horizontal / 2 - 13),
+            rawterm.Pos(topLine, dims.horizontal / 2 - 7),
+            rawterm.Pos(topLine, dims.horizontal / 2),
+            rawterm.Pos(topLine, dims.horizontal / 2 + 3),
+            rawterm.Pos(topLine, dims.horizontal / 2 + 9)
         ]
 
         timerSource.schedule(deadline: .now(), repeating: .seconds(1))
         inputSource.schedule(deadline: .now(), repeating: .milliseconds(20))
         inputSource.setEventHandler {
             dispatchPrecondition(condition: .onQueue(.main))
-            pollInput(numCells: numCells)
+            pollInput(numCells: numCells, horizontal: dims.horizontal)
         }
         inputSource.resume()
 
-        startTimer(numCells: numCells)
+        startTimer(numCells: numCells, horizontal: dims.horizontal)
         dispatchMain()
     }
 
-    static func startTimer(numCells: Array<rawterm.Pos>) {
+    static func startTimer(numCells: Array<rawterm.Pos>, horizontal: Int32) {
         let start = Date()
         timerSource.setEventHandler {
             dispatchPrecondition(condition: .onQueue(.main))
             let elapsedSeconds = Date().timeIntervalSince(start)
-            drawDigits(cur: &cur, time: elapsedSeconds, numCells: numCells);
+            drawDigits(time: elapsedSeconds, numCells: numCells, horizontal: horizontal);
         }
 
         if !timerStarted {
@@ -78,7 +80,7 @@ struct timer {
         }
     }
 
-    static func pollInput(numCells: Array<rawterm.Pos>) {
+    static func pollInput(numCells: Array<rawterm.Pos>, horizontal: Int32) {
         guard var k: rawterm.Key = Optional(fromCxx: rawterm.process_keypress()) else { return }
         let keyCode = UInt8(bitPattern: k.code)
         switch keyCode {
@@ -87,7 +89,8 @@ struct timer {
                     timerSource.resume()
                     suspended = false
                 }
-                startTimer(numCells: numCells)
+
+                startTimer(numCells: numCells, horizontal: horizontal)
 
             case Character("q").asciiValue!:
                 timerSource.cancel()
@@ -98,6 +101,9 @@ struct timer {
                 rawterm.disable_raw_mode()
                 exit(0)
 
+            case Character("c").asciiValue!:
+                drawCaption(horizontal: horizontal)
+
             case Character(" ").asciiValue!:
                 if k.getMod() == rawterm.Mod.Space {
                     (suspended ? timerSource.resume() : timerSource.suspend())
@@ -107,7 +113,7 @@ struct timer {
         }
     }
 
-    static func drawDigits(cur: inout rawterm.Cursor, time: Double, numCells: Array<rawterm.Pos>) {
+    static func drawDigits(time: Double, numCells: Array<rawterm.Pos>, horizontal: Int32) {
         let mins = Int(time / 60)
         let secs = Int(time.truncatingRemainder(dividingBy: 60))
         assert(mins < 60) // TODO: handle hours as well
@@ -115,6 +121,7 @@ struct timer {
         let displayNums = [
             (mins < 10 ? 0 : Int(mins/10)),
             mins % 10,
+            10,
             (secs < 10 ? 0 : Int(secs/10)),
             secs % 10
         ]
@@ -122,7 +129,43 @@ struct timer {
         let backFiveDownOne = "\u{1B}[6D\u{1B}[B"
         for (cell, display) in zip(numCells, displayNums) {
             cur.move(cell)
-            print(digits[display].replacing("\n", with: backFiveDownOne))
+            let digit = digits[display]
+            let digit_lines = digit.split(whereSeparator: \.isNewline)
+            let replacement = backFiveDownOne.replacing("6", with: String(digit_lines[0].count))
+            print(digit.replacing("\n", with: replacement))
+        }
+
+        drawCaption(horizontal: horizontal)
+    }
+
+    static func readCaption() -> String {
+        let filePath = FileManager.default.currentDirectoryPath + "/caption.txt"
+        do {
+            let content = try String(contentsOfFile: filePath, encoding: .utf8)
+            return content.trimmingCharacters(in: .whitespaces)
+        } catch {
+            return ""
+        }
+    }
+
+    static func drawCaption(horizontal: Int32) {
+        let captionLine: Int32 = 10
+
+        let newCaption = readCaption()
+        // We don't need to redraw if nothing has changed
+        if newCaption != caption {
+            caption = newCaption
+        }
+
+        // Clear previous line
+        cur.move(captionLine, 2)
+        print(String(repeating: " ", count: Int(horizontal - 4)))
+
+        if caption.length > 0 {
+            let half = Int32(caption.count / 2)
+            cur.move(rawterm.Pos(captionLine, (horizontal / 2) - half))
+            print(caption)
         }
     }
 }
+

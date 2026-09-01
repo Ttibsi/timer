@@ -1,9 +1,10 @@
+// See line endings with `:set list`
 let ONE = """
   #   
  ##   
   #   
   #   
- ###
+ ###  
 """
 
 let TWO = """
@@ -11,7 +12,7 @@ let TWO = """
 #   # 
    #  
   #   
-#####
+##### 
 """
 
 let THREE = """
@@ -19,7 +20,7 @@ let THREE = """
     # 
  ###  
     # 
-####
+####  
 """
 
 let FOUR = """
@@ -27,7 +28,7 @@ let FOUR = """
 #  #  
 ##### 
    #  
-   #
+   #  
 """
 
 let FIVE = """
@@ -35,15 +36,15 @@ let FIVE = """
 #     
 ####  
     # 
-####
+####  
 """
 
 let SIX = """
-###  
+###   
 #     
 ####  
 #   # 
- ###
+ ###  
 """
 
 let SEVEN = """
@@ -59,7 +60,7 @@ let EIGHT = """
 #   # 
  ###  
 #   # 
- ###
+ ###  
 """
 
 let NINE = """
@@ -67,7 +68,7 @@ let NINE = """
 #   # 
  #### 
     # 
- ###
+ ###  
 """
 
 let ZERO = """
@@ -75,7 +76,8 @@ let ZERO = """
 #   # 
 #   # 
 #   # 
- ###
+ ###  
 """
 
 let digits = [ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE]
+

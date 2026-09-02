@@ -23,11 +23,21 @@ struct timer {
     static var suspended = false
     static var caption = ""
 
+    static var wiggleMode = false
+    static var wiggleOffset: Int32 = -1
+    static var wiggleCount = 1
+    static var lastWiggleCount = 1
+
     static func main() {
         var dims = rawterm.get_term_size();
         if dims.horizontal < 35 || dims.vertical < 11 {
             print("ERROR: Terminal dimensions too small")
             return;
+        }
+
+        let argv = CommandLine.arguments
+        if argv.contains("--wiggle") {
+            wiggleMode = true
         }
 
         dims.vertical -= 1
@@ -127,12 +137,47 @@ struct timer {
         ]
 
         let backFiveDownOne = "\u{1B}[6D\u{1B}[B"
-        for (cell, display) in zip(numCells, displayNums) {
-            cur.move(cell)
+        if wiggleMode { wiggleCount += 1 }
+        let frameWiggleCount = wiggleCount
+        let previousOffset: Int32 = (frameWiggleCount == 1 ? -wiggleOffset : wiggleOffset)
+        for (idx, (cell, display)) in zip(numCells, displayNums).enumerated() {
+
+            if (wiggleMode) {
+                let wasWiggled = idx < lastWiggleCount
+                let isWiggled = idx < frameWiggleCount
+                let oldVertical = (wasWiggled ? (cell.vertical + previousOffset) : cell.vertical)
+                let newVertical = (isWiggled ? (cell.vertical + wiggleOffset) : cell.vertical)
+
+                if oldVertical != newVertical {
+                    let clearLines = digits[display].split(whereSeparator: \.isNewline)
+                    for (lineOffset, line) in clearLines.enumerated() {
+                        cur.move(oldVertical + Int32(lineOffset), cell.horizontal)
+                        print(String(repeating: " ", count: line.count), terminator: "")
+                    }
+                }
+
+                if isWiggled {
+                    cur.move(newVertical, cell.horizontal)
+                } else {
+                    cur.move(cell)
+                }
+            } else {
+                cur.move(cell)
+            }
+
             let digit = digits[display]
             let digit_lines = digit.split(whereSeparator: \.isNewline)
             let replacement = backFiveDownOne.replacing("6", with: String(digit_lines[0].count))
             print(digit.replacing("\n", with: replacement))
+        }
+
+        if wiggleMode {
+            lastWiggleCount = frameWiggleCount
+        }
+
+        if wiggleMode && wiggleCount == 5 { 
+            wiggleCount = 0 
+            wiggleOffset = (wiggleOffset == -1 ? 1 : -1)
         }
 
         drawCaption(horizontal: horizontal)
@@ -168,4 +213,3 @@ struct timer {
         }
     }
 }
-

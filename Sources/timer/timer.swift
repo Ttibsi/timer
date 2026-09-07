@@ -185,16 +185,16 @@ struct timer {
         let captionLine: Int32 = 10
 
         let newCaption = readCaption()
-        // We don't need to redraw if nothing has changed
-        if newCaption != caption {
-            caption = newCaption
-        }
+
+        // Skip all terminal writes when caption text is unchanged.
+        guard newCaption != caption else { return }
+        caption = newCaption
 
         // Clear previous line
         cur.move(captionLine, 2)
         print(String(repeating: " ", count: Int(horizontal - 4)))
 
-        if caption.length > 0 {
+        if !caption.isEmpty {
             let half = Int32(caption.count / 2)
             cur.move(rawterm.Pos(captionLine, (horizontal / 2) - half))
             print(caption)

@@ -1,6 +1,5 @@
 import Foundation;
 import CRawterm;
-// import CRawtermBridge;
 
 @MainActor
 @main
@@ -39,11 +38,10 @@ struct timer {
 
         // Draw border once
         let region = rawterm.Region(rawterm.Pos(1, 1), dims)
-        var border = rawterm.Border(region)
+        let border = rawterm.Border(region)
         let inside_border = Int(dims.vertical)
         let contents = Array(repeating: std.string(""), count: inside_border)
-        b.draw(&cur, contents, inside_border);
-        // rawterm_bridge.drawBorder(&border, &cur, contents, inside_border)
+        border.draw(&cur, contents, inside_border);
 
         let topLine: Int32 = 4;
         let numCells = [

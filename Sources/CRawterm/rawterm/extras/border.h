@@ -145,6 +145,11 @@ namespace rawterm {
             return render;
         };
 
+        void draw(Cursor& cur, const std::string* data, std::size_t count) const {
+            std::vector<std::string> v(data, data + count);
+            draw(cur, v);
+        }
+
         void draw(Cursor& cur, std::span<std::string> text) const {
             // Disable if rawterm_debug
             if (detail::is_debug()) {

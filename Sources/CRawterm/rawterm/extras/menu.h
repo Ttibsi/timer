@@ -7,8 +7,8 @@
 #include <string_view>
 #include <vector>
 
-#include "rawterm/screen.h"
-#include "rawterm/text.h"
+#include "screen.h"
+#include "text.h"
 
 namespace rawterm {
     class Menu {
